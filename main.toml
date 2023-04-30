@@ -1,0 +1,6 @@
+[DATABASE]
+NAME="test" #name of database
+USERNAME="root" 
+PASSWORD="test"
+HOST="localhost"
+PORT="3306"
