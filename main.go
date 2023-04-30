@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,14 +16,56 @@ import (
 	"github.com/pelletier/go-toml"
 )
 
-func getHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.Method)
-	w.Write([]byte("shivamverma"))
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
 }
 
-func testHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.Method)
-	w.Write([]byte("shivam"))
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	userName := r.URL.Query().Get("name")
+	var rows *sql.Rows
+
+	if len(userName) > 0 {
+		rows, _ = conn.QueryContext(context.Background(), "Select * from users where name = ?", userName)
+	} else {
+		rows, _ = conn.QueryContext(context.Background(), "Select * from users")
+	}
+
+	var name string
+	var age int
+
+	users := []User{}
+	for rows.Next() {
+		rows.Scan(&name, &age)
+		users = append(users, User{
+			Name: name,
+			Age:  age,
+		})
+	}
+	userBytes, _ := json.Marshal(users)
+
+	w.WriteHeader(200)
+	w.Write(userBytes)
+}
+
+func addUser(w http.ResponseWriter, r *http.Request) {
+	reqBody, _ := io.ReadAll(r.Body)
+	var user User
+	err := json.Unmarshal(reqBody, &user)
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := conn.ExecContext(context.Background(), "insert into users (name, age) values (?, ?)", user.Name, user.Age)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+
+	log.Println("Rows affected : ", rowsAffected)
+
+	w.WriteHeader(201)
 }
 
 func getPool(absPath string) (*sql.DB, error) {
@@ -71,8 +116,10 @@ func getConnection(ctx context.Context, dbPool *sql.DB) (*sql.Conn, error) {
 	return conn, conErr
 }
 
+var dbPool *sql.DB
+var conn *sql.Conn
+
 func main() {
-	var dbPool *sql.DB
 	var err error
 
 	absPath, err := filepath.Abs(filepath.Dir(os.Args[0]))
@@ -86,7 +133,7 @@ func main() {
 		panic(err)
 	}
 
-	conn, err := getConnection(context.Background(), dbPool)
+	conn, err = getConnection(context.Background(), dbPool)
 	if err != nil {
 		panic(err)
 	}
@@ -99,15 +146,14 @@ func main() {
 		if re != nil {
 			continue
 		}
-		fmt.Println(name, age)
 	}
 	defer rows.Close()
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", getHandler)
+	mux.HandleFunc("/users", getUsers)
 
-	mux.Handle("/test", http.HandlerFunc(testHandler))
+	mux.Handle("/user", http.HandlerFunc(addUser))
 
 	http.ListenAndServe(":8080", mux)
 }
