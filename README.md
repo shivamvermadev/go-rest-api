@@ -6,9 +6,9 @@ type mysqlpool struct {
 
 func getLatestPool(server string, port int64, user string, pwd string, dbname string, connLifeTimeSecs time.Duration, maxIdleConns int64, maxOpenConns int64) (*mysqlpool, error) {
 	pool := &mysqlpool{}
-	//db, err := sql.Open("mysql", "user:password@/dbname")
+	
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", user, pwd, server, port, dbname))
-	//"rb_main_rOnly_ur"+":"+"ViewDataOnly762$"+"@"+"tcp(rbrep.db.redbus.in:3306)"+"/"+"ThePila_rBTest_dbo"
+	
 	if err != nil {
 		return nil, err
 	}
